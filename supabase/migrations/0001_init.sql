@@ -132,6 +132,9 @@ alter table settings enable row level security;
 
 revoke all on all tables in schema public from anon, authenticated;
 revoke all on all sequences in schema public from anon, authenticated;
+grant usage on schema public to service_role;
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role;
 
 create or replace function session_snapshot(p_id uuid) returns jsonb
 language sql stable as $$

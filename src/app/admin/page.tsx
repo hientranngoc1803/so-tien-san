@@ -7,8 +7,10 @@ import DebtTables, { type DebtRow } from "@/components/DebtTables";
 export const dynamic = "force-dynamic";
 
 export default async function AdminHome() {
-  const ledger = await loadLedger();
-  const { count: drafts } = await db().from("sessions").select("id", { count: "exact", head: true }).eq("status", "draft");
+  const [ledger, { count: drafts }] = await Promise.all([
+    loadLedger(),
+    db().from("sessions").select("id", { count: "exact", head: true }).eq("status", "draft"),
+  ]);
   const rows: DebtRow[] = ledger.players.map((p) => {
     const book = ledger.books.get(p.id);
     const dates = [...new Set((book?.openDebits ?? []).map((d) => formatShortDate(d.date)))];

@@ -20,11 +20,10 @@ function formatStamp(iso: string | null): string {
 
 export default async function MyBook({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
-  const ledger = await loadLedger();
+  const [ledger, paySettings] = await Promise.all([loadLedger(), getPaymentSettings()]);
   const player = ledger.players.find((p) => p.short_code.toUpperCase() === code.toUpperCase());
   if (!player) notFound();
   const book = ledger.books.get(player.id)!;
-  const paySettings = await getPaymentSettings();
   const h = headline(book.balance);
   const sessionById = new Map(ledger.sessions.map((s) => [s.id, s]));
 

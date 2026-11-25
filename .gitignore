@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.test-build/
+out/
+.env
+.env.local
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+import/
+*.xlsx
+.vercel

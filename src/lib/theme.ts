@@ -1,0 +1,1 @@
+export const THEME_INIT_SCRIPT = `try{var d=document.documentElement,t=localStorage.getItem('sts:theme'),f=localStorage.getItem('sts:font');if(t==='light'||t==='dark')d.dataset.theme=t;if(f==='lg'||f==='xl')d.dataset.font=f;}catch(e){}`;

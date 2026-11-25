@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
+const AUTHOR = "Hien Tran Ngoc";
+
 export const metadata: Metadata = {
   title: "Sổ tiền sân",
   description: "Sổ tiền sân của đội cầu lông",
@@ -21,7 +23,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <div className="page">{children}</div>
+        <footer className="site-footer">
+          © 2026 {AUTHOR}. All rights reserved. | Designed &amp; Built by {AUTHOR}
+        </footer>
+      </body>
     </html>
   );
 }

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { computeSession, FemaleMode, Gender, ItemKind } from "@/lib/calc";
-import { parseAmount, vnd } from "@/lib/money";
+import { addDays, findDateInTitle, formatDateWd, formatShortDateWd, parseAmount, todayVN, vnd, weekdayName } from "@/lib/money";
 import { guestLabel, toCalcInput } from "@/lib/session-input";
 import { WEEKDAYS, type Player, type SessionPayload } from "@/lib/types";
 import { saveSessionAction, saveTemplateAction } from "@/app/admin/actions";
@@ -294,21 +294,66 @@ export default function SessionEditor({
   const personal = items.filter((i) => i.kind === "personal");
   const blocking = [...inputErrors, ...calc.errors];
   if (calc.manual && !ovReason.trim()) blocking.push("Nhập lý do chỉnh tay mức thu trước khi chốt.");
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const today = todayVN();
+  const yesterday = addDays(today, -1);
+  const titleDate = validDate ? findDateInTitle(title, date) : null;
 
   return (
     <div className="stack">
       <div className="card">
         <h2>Thông tin buổi</h2>
         <div className="row">
+          <div>
+            <label>
+              <span>
+                Ngày chơi{validDate && <strong style={{ marginLeft: 6 }}>· {weekdayName(date)}</strong>}
+              </span>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </label>
+            <div className="hstack" style={{ marginTop: 4 }}>
+              <button type="button" className="small" disabled={date === yesterday} onClick={() => setDate(yesterday)}>
+                Hôm qua ({formatShortDateWd(yesterday)})
+              </button>
+              <button type="button" className="small" disabled={date === today} onClick={() => setDate(today)}>
+                Hôm nay ({formatShortDateWd(today)})
+              </button>
+            </div>
+          </div>
           <label>
-            Ngày
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
-          <label>
-            Tên buổi / ca (tuỳ chọn)
+            Tên ca / sân (tuỳ chọn, không cần ghi ngày)
             <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="VD: Sân A, ca 1" />
           </label>
         </div>
+        {titleDate && titleDate.iso !== date && (
+          <div className="alert warn" style={{ marginTop: 10 }}>
+            Tên buổi có vẻ ghi ngày <strong>{formatDateWd(titleDate.iso)}</strong>, nhưng ngày chơi đang là{" "}
+            <strong>{validDate ? formatDateWd(date) : "—"}</strong>. Ngày chơi quyết định thứ tự trừ nợ, nên cần đúng.
+            <div className="hstack" style={{ marginTop: 6 }}>
+              <button
+                type="button"
+                className="primary small"
+                onClick={() => {
+                  setDate(titleDate.iso);
+                  setTitle(titleDate.stripped);
+                }}
+              >
+                Đổi ngày chơi thành {formatShortDateWd(titleDate.iso)} và bỏ ngày khỏi tên
+              </button>
+              <button type="button" className="small" onClick={() => setTitle(titleDate.stripped)}>
+                Giữ ngày {validDate ? formatShortDateWd(date) : ""}, chỉ bỏ ngày khỏi tên
+              </button>
+            </div>
+          </div>
+        )}
+        {titleDate && titleDate.iso === date && (
+          <div className="muted small" style={{ marginTop: 8 }}>
+            Ngày đã hiển thị sẵn cạnh tên buổi.{" "}
+            <button type="button" className="link small" onClick={() => setTitle(titleDate.stripped)}>
+              Bỏ ngày khỏi tên
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="card">

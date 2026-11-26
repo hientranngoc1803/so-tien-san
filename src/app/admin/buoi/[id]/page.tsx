@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getPlayers, getSession, getSessionDetail, getSessionInternalNote, getTemplates } from "@/lib/data";
 import { db } from "@/lib/supabase";
-import { formatShortDate } from "@/lib/money";
+import { formatShortDateWd } from "@/lib/money";
 import { shortK } from "@/lib/session-input";
 import type { SessionPayload } from "@/lib/types";
 import SessionEditor from "@/components/SessionEditor";
@@ -97,7 +97,7 @@ export default async function AdminSessionPage({
     session.female_share !== null ? `${shortK(Number(session.female_share))}/nữ` : null,
   ].filter(Boolean);
   const summary = [
-    `🏸 Buổi ${formatShortDate(session.session_date)}${session.title ? ` · ${session.title}` : ""}`,
+    `🏸 Buổi ${formatShortDateWd(session.session_date)}${session.title ? ` · ${session.title}` : ""}`,
     rates.join(" · "),
     `Xem sổ của bạn: ${origin}/`,
     `Chi tiết buổi: ${origin}/buoi/${session.id}`,

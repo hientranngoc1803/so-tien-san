@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatDate, vnd } from "@/lib/money";
+import { formatDateWd, vnd } from "@/lib/money";
 import { guestLabel } from "@/lib/session-input";
 import type { ItemRow, ParticipantRow, Player, SessionRow } from "@/lib/types";
 
@@ -32,7 +32,7 @@ export default function SessionSummary({
     <>
       <div className="card">
         <h1>
-          Buổi {formatDate(session.session_date)}
+          Buổi {formatDateWd(session.session_date)}
           {session.title ? ` · ${session.title}` : ""}
         </h1>
         <div className="grid-stats">

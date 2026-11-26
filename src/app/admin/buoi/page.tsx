@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db, fetchAll } from "@/lib/supabase";
-import { formatDate, formatShortDate, lastWeekdayOnOrBefore, signedVnd, todayVN, vnd } from "@/lib/money";
+import { formatDateWd, formatShortDateWd, lastWeekdayOnOrBefore, signedVnd, todayVN, vnd } from "@/lib/money";
 import { getTemplates } from "@/lib/data";
 import { createSessionAction } from "../actions";
 
@@ -56,7 +56,7 @@ export default async function SessionsPage() {
                   {t.weekday !== null && (
                     <span className="small" style={{ opacity: 0.8 }}>
                       {" "}
-                      · {formatShortDate(lastWeekdayOnOrBefore(today, t.weekday))}
+                      · {formatShortDateWd(lastWeekdayOnOrBefore(today, t.weekday))}
                     </span>
                   )}
                 </button>
@@ -96,7 +96,7 @@ export default async function SessionsPage() {
             {rows.map((r) => (
               <tr key={r.id}>
                 <td>
-                  <Link href={`/admin/buoi/${r.id}`}>{formatDate(r.session_date)}</Link>
+                  <Link href={`/admin/buoi/${r.id}`}>{formatDateWd(r.session_date)}</Link>
                 </td>
                 <td>{r.title ?? ""}</td>
                 <td>

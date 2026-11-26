@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadLedger } from "@/lib/data";
 import { headline } from "@/lib/ledger";
-import { formatShortDate, signedVnd, vnd } from "@/lib/money";
+import { formatShortDate, formatShortDateWd, signedVnd, vnd } from "@/lib/money";
 import StatusBadge from "@/components/Status";
 import { RememberPlayer } from "@/components/PlayerPicker";
 import PaymentCard from "@/components/PaymentCard";
@@ -76,7 +76,7 @@ export default async function MyBook({ params }: { params: Promise<{ code: strin
             <details key={line.sessionId} className="line-item" style={{ display: "block" }}>
               <summary>
                 <div className="hstack">
-                  <strong>{formatShortDate(line.date)}</strong>
+                  <strong>{formatShortDateWd(line.date)}</strong>
                   <span className="muted">{line.title ?? ""}</span>
                   <span className="spacer" />
                   <span className="num">{vnd(line.amount)}</span>

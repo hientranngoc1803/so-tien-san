@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { loadLedger } from "@/lib/data";
-import { formatDate, signedVnd, vnd } from "@/lib/money";
+import { formatDateWd, signedVnd, vnd } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +88,7 @@ export default async function OwnerPage() {
             {ledger.sessions.map((s) => (
               <tr key={s.id}>
                 <td>
-                  <Link href={`/admin/buoi/${s.id}`}>{formatDate(s.session_date)}</Link>
+                  <Link href={`/admin/buoi/${s.id}`}>{formatDateWd(s.session_date)}</Link>
                 </td>
                 <td>{s.title ?? ""}</td>
                 <td className="num">{vnd(Number(s.shared_total))}</td>

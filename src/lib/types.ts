@@ -71,6 +71,35 @@ export interface TxnRow {
   created_at: string;
 }
 
+export interface TemplateItem {
+  label: string;
+  amount: number | null;
+  paidBy: string | null;
+}
+
+export interface SessionTemplate {
+  id: string;
+  name: string;
+  weekday: number | null;
+  female_mode: FemaleMode;
+  female_value: number;
+  player_ids: string[];
+  items: TemplateItem[];
+  updated_at: string;
+}
+
+export interface TemplateInput {
+  id: string | null;
+  name: string;
+  weekday: number | null;
+  femaleMode: FemaleMode;
+  femaleValue: number;
+  playerIds: string[];
+  items: TemplateItem[];
+}
+
+export const WEEKDAYS = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
+
 export interface SessionPayload {
   id?: string;
   date: string;

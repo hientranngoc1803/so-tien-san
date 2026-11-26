@@ -1,4 +1,4 @@
-export type TxnKind = "payment" | "refund" | "opening";
+export type TxnKind = "payment" | "refund" | "opening" | "transfer";
 
 export interface LedgerPlayer {
   id: string;
@@ -101,14 +101,13 @@ export interface OpenDebit {
   sessionId?: string;
 }
 
-export const PREPAY_LABEL = "Nộp quỹ trước";
 
 export interface Book {
   playerId: string;
   balance: number;
   totalCredit: number;
   totalDebit: number;
-  fundDeposits: number;
+  totalPaid: number;
   openDebits: OpenDebit[];
   sessionLines: SessionLine[];
   txnLines: TxnLine[];
@@ -190,6 +189,7 @@ const KIND_LABEL: Record<TxnKind, string> = {
   payment: "Nộp tiền",
   refund: "Hoàn tiền",
   opening: "Số dư đầu kỳ",
+  transfer: "Trả hộ",
 };
 
 export function txnKindLabel(t: LedgerTxn): string {
@@ -288,6 +288,16 @@ export function buildBooks(data: LedgerData): Map<string, Book> {
         add(credits, cp, { ...base, id: cpId, amount: t.amount, label });
         addTxnRef(cp, { txn: t, role: "counterparty", entryId: cpId, effect: t.amount, label });
       }
+    } else if (t.kind === "transfer") {
+      const payer = t.counterpartyId;
+      const inLabel = `${names.get(payer ?? "") ?? "?"} trả hộ`;
+      add(credits, t.playerId, { ...base, id: selfId, amount: t.amount, label: inLabel });
+      addTxnRef(t.playerId, { txn: t, role: "self", entryId: selfId, effect: t.amount, label: inLabel });
+      if (payer) {
+        const outLabel = `Trả hộ ${names.get(t.playerId) ?? "?"}`;
+        add(debits, payer, { ...base, id: cpId, amount: t.amount, label: outLabel });
+        addTxnRef(payer, { txn: t, role: "counterparty", entryId: cpId, effect: -t.amount, label: outLabel });
+      }
     } else if (t.amount > 0) {
       add(credits, t.playerId, { ...base, id: selfId, amount: t.amount, label: txnKindLabel(t) });
       addTxnRef(t.playerId, { txn: t, role: "self", entryId: selfId, effect: t.amount, label: txnKindLabel(t) });
@@ -360,15 +370,15 @@ export function buildBooks(data: LedgerData): Map<string, Book> {
         sessionId: d.sessionId,
       }))
       .filter((d) => d.remaining > 0);
-    const fundDeposits = data.txns
-      .filter((t) => t.playerId === pid && t.kind === "payment" && t.label === PREPAY_LABEL)
+    const totalPaid = data.txns
+      .filter((t) => t.playerId === pid && t.kind === "payment")
       .reduce((s, t) => s + t.amount, 0);
     books.set(pid, {
       playerId: pid,
       balance: totalCredit - totalDebit,
       totalCredit,
       totalDebit,
-      fundDeposits,
+      totalPaid,
       openDebits,
       sessionLines: lines,
       txnLines,

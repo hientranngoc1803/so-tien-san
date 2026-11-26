@@ -52,3 +52,10 @@ export function todayVN(): string {
   const now = new Date(Date.now() + 7 * 3600 * 1000);
   return now.toISOString().slice(0, 10);
 }
+
+export function lastWeekdayOnOrBefore(isoDate: string, weekday: number): string {
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  const back = (d.getUTCDay() - weekday + 7) % 7;
+  d.setUTCDate(d.getUTCDate() - back);
+  return d.toISOString().slice(0, 10);
+}

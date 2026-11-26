@@ -135,5 +135,42 @@ test("khoan con no giu dung ngay goc, cu nhat truoc", () => {
     hai.openDebits.map((d) => [d.date, d.remaining]),
     [["2026-11-24", 212000], ["2026-12-01", 60000]],
   );
-  assert.equal(hai.fundDeposits, 50000);
+  assert.equal(hai.totalPaid, 250000);
+});
+
+test("tra ho tu quy: Hai du 300k tra 90k cho Ngoc", () => {
+  const books = buildBooks(
+    data({
+      sessions: [s("b1", "2026-12-01")],
+      participants: [part("b1", "NGOC", 90000)],
+      txns: [
+        txn("p1", "HAI", "payment", 300000, "2026-11-30"),
+        txn("x1", "NGOC", "transfer", 90000, "2026-12-02", "HAI"),
+      ],
+    }),
+  );
+  const hai = books.get("HAI")!;
+  const ngoc = books.get("NGOC")!;
+  assert.equal(hai.balance, 210000);
+  assert.equal(ngoc.balance, 0);
+  assert.equal(ngoc.sessionLines[0].status, "paid");
+  assert.equal(hai.totalPaid, 300000);
+  assert.equal(ngoc.totalPaid, 0);
+  assert.ok(hai.txnLines.some((l) => l.label === "Trả hộ Ngọc" && l.balanceAfter === 210000));
+  assert.ok(ngoc.txnLines.some((l) => l.label === "Hải trả hộ"));
+});
+
+test("tra ho bang chuyen khoan moi: Hai nop 300k, tra ho Ngoc 100k va Hien 100k", () => {
+  const books = buildBooks(
+    data({
+      txns: [
+        txn("p1", "HAI", "payment", 300000, "2026-12-02"),
+        txn("x1", "NGOC", "transfer", 100000, "2026-12-02", "HAI"),
+        txn("x2", "HIEN", "transfer", 100000, "2026-12-02", "HAI"),
+      ],
+    }),
+  );
+  assert.equal(books.get("HAI")!.balance, 100000);
+  assert.equal(books.get("NGOC")!.balance, 100000);
+  assert.equal(books.get("HIEN")!.balance, 100000);
 });

@@ -10,12 +10,13 @@ export const dynamic = "force-dynamic";
 interface Row {
   id: number;
   player_id: string;
-  kind: "payment" | "refund" | "opening";
+  kind: "payment" | "refund" | "opening" | "transfer";
   label: string | null;
   amount: number;
   counterparty_player_id: string | null;
   txn_date: string;
   bank_ref: string | null;
+  group_ref: string | null;
   public_note: string | null;
   internal_note: string | null;
   created_by: string;
@@ -23,7 +24,7 @@ interface Row {
   void_reason: string | null;
 }
 
-const KIND: Record<Row["kind"], string> = { payment: "Nộp tiền", refund: "Hoàn tiền", opening: "Số dư đầu kỳ" };
+const KIND: Record<Row["kind"], string> = { payment: "Nộp tiền", refund: "Hoàn tiền", opening: "Điều chỉnh", transfer: "Được trả hộ" };
 
 export default async function TxnListPage({
   searchParams,
@@ -36,7 +37,7 @@ export default async function TxnListPage({
   const rows = await fetchAll<Row>((from, to) => {
     let q = db()
       .from("transactions")
-      .select("id, player_id, kind, label, amount, counterparty_player_id, txn_date, bank_ref, public_note, internal_note, created_by, voided_at, void_reason")
+      .select("id, player_id, kind, label, amount, counterparty_player_id, txn_date, bank_ref, group_ref, public_note, internal_note, created_by, voided_at, void_reason")
       .order("txn_date", { ascending: false })
       .order("id", { ascending: false });
     if (sp.player && /^[0-9a-f-]{36}$/i.test(sp.player)) {
@@ -105,7 +106,7 @@ export default async function TxnListPage({
                   {name.get(r.player_id)}
                   {r.counterparty_player_id && (
                     <div className="muted small">
-                      {r.kind === "refund" ? "Người chuyển trả" : "Người nhận"}: {name.get(r.counterparty_player_id)}
+                      {r.kind === "refund" ? "Người chuyển trả" : r.kind === "transfer" ? "Người trả" : "Người nhận"}: {name.get(r.counterparty_player_id)}
                     </div>
                   )}
                 </td>
@@ -127,6 +128,7 @@ export default async function TxnListPage({
                       <form action={voidTransactionAction} className="stack" style={{ marginTop: 6, minWidth: 180 }}>
                         <input type="hidden" name="id" value={r.id} />
                         <input type="hidden" name="back" value={back} />
+                        {r.group_ref && <span className="muted small">Huỷ cả nhóm giao dịch đi cùng.</span>}
                         <input type="text" name="reason" placeholder="Lý do huỷ" required />
                         <button type="submit" className="danger">
                           Xác nhận huỷ

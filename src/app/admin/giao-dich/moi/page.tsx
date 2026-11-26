@@ -13,7 +13,9 @@ export default async function NewTxnPage({
   const ledger = await loadLedger();
   const balances: Record<string, number> = {};
   for (const [id, b] of ledger.books) balances[id] = b.balance;
-  const mode = ["payment", "prepay", "refund", "split", "adjust"].includes(sp.mode ?? "") ? (sp.mode as "payment") : "payment";
+  const legacy: Record<string, string> = { prepay: "payment", split: "transfer" };
+  const wanted = legacy[sp.mode ?? ""] ?? sp.mode ?? "";
+  const mode = (["payment", "transfer", "refund", "adjust"] as const).find((m) => m === wanted) ?? "payment";
   return (
     <>
       <h1>Ghi nhận tiền</h1>

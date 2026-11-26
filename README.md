@@ -13,7 +13,7 @@ Làm theo thứ tự. Tổng thời gian khoảng 30 phút.
    - Database password: tạo một mật khẩu mạnh và lưu lại.
    - Region: **Southeast Asia (Singapore)**
 2. Đợi khoảng 2 phút cho project khởi tạo xong.
-3. Vào **SQL Editor** → **New query**. Dán toàn bộ nội dung file `supabase/migrations/0001_init.sql`, bấm **Run**. Kết quả phải là `Success`.
+3. Vào **SQL Editor** → **New query**. Lần lượt dán và chạy (**Run**) từng file trong `supabase/migrations/` theo thứ tự số: `0001_...`, `0002_...`, `0003_...`. Mỗi file phải ra `Success`.
 4. Thêm email Google của quản lý đầu tiên. Vẫn trong SQL Editor, chạy:
    ```sql
    insert into admins (email) values ('email-cua-ban@gmail.com');

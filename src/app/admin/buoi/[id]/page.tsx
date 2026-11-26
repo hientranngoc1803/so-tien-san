@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { getPlayers, getSession, getSessionDetail, getSessionInternalNote } from "@/lib/data";
+import { getPlayers, getSession, getSessionDetail, getSessionInternalNote, getTemplates } from "@/lib/data";
+import { db } from "@/lib/supabase";
 import { formatShortDate } from "@/lib/money";
 import { shortK } from "@/lib/session-input";
 import type { SessionPayload } from "@/lib/types";
@@ -27,6 +28,10 @@ export default async function AdminSessionPage({
   const owner = players.find((p) => p.is_court_owner) ?? null;
 
   if (session.status === "draft") {
+    const [templates, { data: link }] = await Promise.all([
+      getTemplates(),
+      db().from("sessions").select("template_id").eq("id", id).maybeSingle(),
+    ]);
     const initial: SessionPayload & { id: string } = {
       id: session.id,
       date: session.session_date,
@@ -72,7 +77,13 @@ export default async function AdminSessionPage({
             Chưa gắn hồ sơ chủ sân. Vào <Link href="/admin/nguoi-choi">Người chơi</Link> để gắn trước khi chốt.
           </div>
         )}
-        <SessionEditor initial={initial} players={players} courtOwnerId={owner?.id ?? null} />
+        <SessionEditor
+          initial={initial}
+          players={players}
+          courtOwnerId={owner?.id ?? null}
+          templates={templates.map((t) => ({ id: t.id, name: t.name, weekday: t.weekday }))}
+          templateId={(link?.template_id as string | null) ?? null}
+        />
       </>
     );
   }

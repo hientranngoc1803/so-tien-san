@@ -5,6 +5,7 @@ export const BACKUP_TABLES = [
   "players",
   "admins",
   "settings",
+  "session_templates",
   "sessions",
   "session_participants",
   "session_items",

@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { computeSession, FemaleMode, Gender, ItemKind } from "@/lib/calc";
 import { parseAmount, vnd } from "@/lib/money";
 import { guestLabel, toCalcInput } from "@/lib/session-input";
-import type { Player, SessionPayload } from "@/lib/types";
-import { saveSessionAction } from "@/app/admin/actions";
+import { WEEKDAYS, type Player, type SessionPayload } from "@/lib/types";
+import { saveSessionAction, saveTemplateAction } from "@/app/admin/actions";
 import SearchSelect from "./SearchSelect";
 
 interface ItemDraft {
@@ -46,10 +46,14 @@ export default function SessionEditor({
   initial,
   players,
   courtOwnerId,
+  templates,
+  templateId,
 }: {
   initial: SessionPayload & { id: string };
   players: Player[];
   courtOwnerId: string | null;
+  templates: { id: string; name: string; weekday: number | null }[];
+  templateId: string | null;
 }) {
   const router = useRouter();
   const byId = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
@@ -115,6 +119,15 @@ export default function SessionEditor({
   const [serverErrors, setServerErrors] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
+  const linked = templates.find((t) => t.id === templateId) ?? null;
+  const [tplTarget, setTplTarget] = useState(linked?.id ?? "");
+  const [tplName, setTplName] = useState(linked?.name ?? initial.title ?? "");
+  const [tplWeekday, setTplWeekday] = useState<string>(
+    linked ? (linked.weekday === null ? "" : String(linked.weekday)) : String(new Date(`${initial.date}T00:00:00Z`).getUTCDay()),
+  );
+  const [tplBusy, setTplBusy] = useState(false);
+  const [tplMessage, setTplMessage] = useState("");
+  const [tplErrors, setTplErrors] = useState<string[]>([]);
 
   const memberIds = new Set(members.map((m) => m.playerId));
   const selectable = players.filter((p) => p.is_active || memberIds.has(p.id));
@@ -228,6 +241,47 @@ export default function SessionEditor({
     } finally {
       setBusy(false);
       setConfirmClose(false);
+    }
+  };
+
+  const pickTemplate = (id: string) => {
+    setTplTarget(id);
+    const t = templates.find((x) => x.id === id);
+    if (t) {
+      setTplName(t.name);
+      setTplWeekday(t.weekday === null ? "" : String(t.weekday));
+    }
+  };
+
+  const saveTemplate = async () => {
+    setTplBusy(true);
+    setTplErrors([]);
+    setTplMessage("");
+    try {
+      const res = await saveTemplateAction(
+        {
+          id: tplTarget || null,
+          name: tplName,
+          weekday: tplWeekday === "" ? null : Number(tplWeekday),
+          femaleMode,
+          femaleValue: payload.femaleValue,
+          playerIds: members.map((m) => m.playerId),
+          items: payload.items
+            .filter((i) => i.kind === "shared" && i.label.trim())
+            .map((i) => ({ label: i.label, amount: i.amount || null, paidBy: i.paidBy })),
+        },
+        initial.id,
+      );
+      if (!res.ok) setTplErrors(res.errors ?? ["Có lỗi."]);
+      else {
+        setTplTarget(res.id ?? "");
+        setTplMessage(tplTarget ? "Đã cập nhật mẫu." : "Đã lưu mẫu mới.");
+        router.refresh();
+      }
+    } catch (e) {
+      setTplErrors([e instanceof Error ? e.message : "Có lỗi."]);
+    } finally {
+      setTplBusy(false);
     }
   };
 
@@ -585,6 +639,57 @@ export default function SessionEditor({
           <textarea value={internalNote} onChange={(e) => setInternalNote(e.target.value)} />
         </label>
       </div>
+
+      <details className="card">
+        <summary>
+          <strong>Lưu thành mẫu</strong>{" "}
+          <span className="muted small">{linked ? `(tạo từ mẫu "${linked.name}")` : "(để lần sau tạo buổi nhanh hơn)"}</span>
+        </summary>
+        <p className="muted small">
+          Mẫu lưu danh sách người chơi đang chọn (không gồm khách), các khoản chi phí chung và cách tính phí nữ.
+        </p>
+        <div className="row">
+          <label>
+            Lưu vào
+            <select value={tplTarget} onChange={(e) => pickTemplate(e.target.value)}>
+              <option value="">+ Mẫu mới</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  Ghi đè: {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Tên mẫu
+            <input type="text" value={tplName} onChange={(e) => setTplName(e.target.value)} placeholder="VD: Thứ 3 – sân A" />
+          </label>
+          <label style={{ flex: "0 1 150px" }}>
+            Thứ chơi
+            <select value={tplWeekday} onChange={(e) => setTplWeekday(e.target.value)}>
+              <option value="">Không cố định</option>
+              {WEEKDAYS.map((w, i) => (
+                <option key={i} value={i}>
+                  {w}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" disabled={tplBusy || !tplName.trim()} onClick={saveTemplate} style={{ flex: "0 0 auto" }}>
+            {tplTarget ? "Cập nhật mẫu" : "Lưu mẫu"}
+          </button>
+        </div>
+        {tplErrors.map((e, i) => (
+          <div key={i} className="alert error" style={{ marginTop: 8 }}>
+            {e}
+          </div>
+        ))}
+        {tplMessage && (
+          <div className="alert ok" style={{ marginTop: 8 }}>
+            {tplMessage}
+          </div>
+        )}
+      </details>
 
       <div className="card">
         {serverErrors.map((e, i) => (

@@ -54,7 +54,7 @@ export default async function MyBook({ params }: { params: Promise<{ code: strin
           {h.tone === "even" ? "0 đ" : vnd(Math.abs(book.balance))}
         </div>
         <div className="muted small">Cập nhật {formatStamp(ledger.lastUpdated)}</div>
-        {book.fundDeposits > 0 && <div className="muted small">Tổng đã đóng quỹ: {vnd(book.fundDeposits)}</div>}
+        {book.totalPaid > 0 && <div className="muted small">Tổng đã nộp: {vnd(book.totalPaid)}</div>}
       </div>
 
       {book.balance < 0 && (

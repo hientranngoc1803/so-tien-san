@@ -1,7 +1,7 @@
 import "server-only";
 import { db, fetchAll } from "./supabase";
 import { buildBooks, Book, LedgerData } from "./ledger";
-import type { ItemRow, ParticipantRow, Player, SessionRow, TxnRow } from "./types";
+import type { ItemRow, ParticipantRow, Player, SessionRow, SessionTemplate, TxnRow } from "./types";
 
 const PLAYER_COLS = "id, short_code, display_name, gender, is_active, is_court_owner";
 const SESSION_COLS =
@@ -137,4 +137,14 @@ export async function loadLedger(): Promise<LedgerBundle> {
     courtOwner,
     lastUpdated: stamps.length ? stamps[stamps.length - 1] : null,
   };
+}
+
+export async function getTemplates(): Promise<SessionTemplate[]> {
+  const { data, error } = await db()
+    .from("session_templates")
+    .select("id, name, weekday, female_mode, female_value, player_ids, items, updated_at")
+    .order("weekday", { ascending: true, nullsFirst: false })
+    .order("name");
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as SessionTemplate[]).map((t) => ({ ...t, female_value: Number(t.female_value), items: t.items ?? [] }));
 }

@@ -56,11 +56,11 @@ export default async function AdminHome() {
         <Link href="/admin/giao-dich/moi" className="btn">
           + Ghi nhận tiền
         </Link>
-        <Link href="/admin/giao-dich/moi?mode=prepay" className="btn">
-          + Nộp quỹ trước
+        <Link href="/admin/giao-dich/moi?mode=transfer" className="btn">
+          + Trả hộ
         </Link>
         <Link href="/admin/giao-dich/moi?mode=adjust" className="btn">
-          + Đầu kỳ / điều chỉnh
+          + Điều chỉnh / sửa sai
         </Link>
         <span className="spacer" />
         <a href="/admin/xuat/cong-no" className="btn">

@@ -15,7 +15,7 @@ export async function GET() {
   if (!(await getAdmin())) return NextResponse.json({ ok: false }, { status: 401 });
   const ledger = await loadLedger();
   const rows: (string | number)[][] = [
-    ["Mã", "Tên", "Đang chơi", "Số dư", "Còn phải trả", "Đang dư", "Đã đóng quỹ", "Ngày chưa thanh toán"],
+    ["Mã", "Tên", "Đang chơi", "Số dư", "Còn phải trả", "Đang dư", "Tổng đã nộp", "Ngày chưa thanh toán"],
   ];
   const sorted = [...ledger.players].sort(
     (a, b) => (ledger.books.get(a.id)?.balance ?? 0) - (ledger.books.get(b.id)?.balance ?? 0),
@@ -30,7 +30,7 @@ export async function GET() {
       bal,
       bal < 0 ? -bal : 0,
       bal > 0 ? bal : 0,
-      b?.fundDeposits ?? 0,
+      b?.totalPaid ?? 0,
       [...new Set((b?.openDebits ?? []).map((d) => formatShortDate(d.date)))].join(", "),
     ]);
   }

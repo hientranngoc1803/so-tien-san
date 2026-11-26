@@ -4,13 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { computeSession } from "@/lib/calc";
-import { getPlayers, loadLedger } from "@/lib/data";
+import { getPlayers, getSessionDetail, loadLedger } from "@/lib/data";
 import { isSimilarName } from "@/lib/names";
 import { toCalcInput } from "@/lib/session-input";
 import { db } from "@/lib/supabase";
-import type { SessionPayload } from "@/lib/types";
-import { todayVN } from "@/lib/money";
-import { PREPAY_LABEL } from "@/lib/ledger";
+import type { SessionPayload, TemplateInput, TemplateItem } from "@/lib/types";
+import { lastWeekdayOnOrBefore, todayVN } from "@/lib/money";
 import { BANK_KEY, QR_DATA_URL, QR_KEY, QR_MAX_BYTES } from "@/lib/settings";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -131,42 +130,161 @@ export async function saveSessionAction(payload: SessionPayload, close: boolean)
   return { ok: true, id: data as string };
 }
 
+const UUID_RE = /^[0-9a-f-]{36}$/i;
+
 export async function createSessionAction(formData: FormData) {
   const admin = await requireAdmin();
-  const fromPrevious = formData.get("from") === "previous";
+  const from = String(formData.get("from") ?? "");
+  const players = await getPlayers();
+  const active = new Map(players.filter((p) => p.is_active).map((p) => [p.id, p]));
+  const owner = players.find((p) => p.is_court_owner) ?? null;
+  const today = todayVN();
   const payload: Record<string, unknown> = {
-    session_date: todayVN(),
+    session_date: today,
     female_mode: "discount",
     female_value: 0,
     participants: [],
     items: [],
   };
-  if (fromPrevious) {
+  let templateId: string | null = null;
+
+  const memberRows = (ids: string[]) =>
+    [...new Set(ids)]
+      .filter((id) => active.has(id))
+      .map((id) => ({ pkey: `p:${id}`, player_id: id, gender: active.get(id)!.gender }));
+  const itemRows = (list: TemplateItem[]) =>
+    list.map((i, idx) => ({
+      position: idx,
+      kind: "shared",
+      label: i.label,
+      amount: i.amount ?? 0,
+      paid_by_player_id: i.paidBy && i.paidBy !== owner?.id && active.has(i.paidBy) ? i.paidBy : null,
+    }));
+
+  if (from.startsWith("template:")) {
+    const id = from.slice("template:".length);
+    if (!UUID_RE.test(id)) redirect("/admin/buoi");
+    const { data: t } = await db().from("session_templates").select("*").eq("id", id).maybeSingle();
+    if (!t) redirect("/admin/buoi");
+    templateId = t.id;
+    payload.session_date = t.weekday === null ? today : lastWeekdayOnOrBefore(today, t.weekday);
+    payload.title = t.name;
+    payload.female_mode = t.female_mode;
+    payload.female_value = t.female_value;
+    payload.participants = memberRows(t.player_ids ?? []);
+    payload.items = itemRows((t.items ?? []) as TemplateItem[]);
+  } else if (from === "previous") {
     const { data: prev } = await db()
       .from("sessions")
-      .select("id, female_mode, female_value")
+      .select("id, title, female_mode, female_value, template_id")
       .eq("status", "closed")
       .order("session_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
     if (prev) {
-      const { data: parts } = await db()
-        .from("session_participants")
-        .select("pkey, player_id, host_player_id, guest_label, gender")
-        .eq("session_id", prev.id)
-        .order("id");
-      const players = await getPlayers();
-      const active = new Set(players.filter((p) => p.is_active).map((p) => p.id));
+      const { participants, items } = await getSessionDetail(prev.id);
+      templateId = prev.template_id ?? null;
+      payload.title = prev.title ?? "";
       payload.female_mode = prev.female_mode;
       payload.female_value = prev.female_value;
-      payload.participants = (parts ?? []).filter((p) => active.has(p.player_id ?? p.host_player_id));
+      payload.participants = memberRows(participants.filter((p) => p.player_id).map((p) => p.player_id!));
+      payload.items = itemRows(
+        items
+          .filter((i) => i.kind === "shared")
+          .map((i) => ({ label: i.label, amount: Number(i.amount), paidBy: i.paid_by_player_id })),
+      );
     }
   }
   const { data, error } = await db().rpc("save_session", { p: payload, p_actor: admin.email, p_close: false });
   if (error) throw new Error(error.message);
+  if (templateId) await db().from("sessions").update({ template_id: templateId }).eq("id", data);
   done();
   redirect(`/admin/buoi/${data}`);
+}
+
+function cleanTemplate(input: TemplateInput, playerIds: Set<string>): { errors: string[]; row: Record<string, unknown> } {
+  const errors: string[] = [];
+  const name = (input.name ?? "").trim();
+  if (!name) errors.push("Nhập tên mẫu.");
+  if (name.length > 80) errors.push("Tên mẫu quá dài.");
+  if (input.weekday !== null && (!isInt(input.weekday) || input.weekday < 0 || input.weekday > 6)) errors.push("Thứ không hợp lệ.");
+  if (!["discount", "fixed"].includes(input.femaleMode)) errors.push("Chế độ phí nữ không hợp lệ.");
+  if (!isInt(input.femaleValue) || input.femaleValue < 0) errors.push("Mức nữ không hợp lệ.");
+  const items: TemplateItem[] = [];
+  for (const i of input.items ?? []) {
+    const label = (i.label ?? "").trim();
+    if (!label) continue;
+    if (i.amount !== null && (!isInt(i.amount) || i.amount < 0)) errors.push(`Số tiền "${label}" không hợp lệ.`);
+    items.push({ label: label.slice(0, 80), amount: i.amount || null, paidBy: i.paidBy && playerIds.has(i.paidBy) ? i.paidBy : null });
+  }
+  return {
+    errors,
+    row: {
+      name,
+      weekday: input.weekday,
+      female_mode: input.femaleMode,
+      female_value: input.femaleValue,
+      player_ids: [...new Set((input.playerIds ?? []).filter((id) => playerIds.has(id)))],
+      items: items.slice(0, 20),
+      updated_at: new Date().toISOString(),
+    },
+  };
+}
+
+export async function saveTemplateAction(input: TemplateInput, sessionId: string | null): Promise<SaveResult> {
+  const admin = await requireAdmin();
+  const players = await getPlayers();
+  const { errors, row } = cleanTemplate(input, new Set(players.map((p) => p.id)));
+  if (errors.length) return { ok: false, errors };
+  let id = input.id;
+  if (id) {
+    if (!UUID_RE.test(id)) return { ok: false, errors: ["Mẫu không hợp lệ."] };
+    const { data, error } = await db().from("session_templates").update(row).eq("id", id).select("id");
+    if (error) return { ok: false, errors: [error.message] };
+    if (!data?.length) return { ok: false, errors: ["Mẫu không còn tồn tại."] };
+  } else {
+    const { data, error } = await db()
+      .from("session_templates")
+      .insert({ ...row, created_by: admin.email })
+      .select("id")
+      .single();
+    if (error) return { ok: false, errors: [error.message] };
+    id = data.id as string;
+  }
+  if (sessionId && UUID_RE.test(sessionId)) {
+    await db().from("sessions").update({ template_id: id }).eq("id", sessionId).eq("status", "draft");
+  }
+  revalidatePath("/admin/buoi", "layout");
+  return { ok: true, id: id! };
+}
+
+export async function updateTemplateMetaAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const wd = String(formData.get("weekday") ?? "");
+  const weekday = wd === "" ? null : Number(wd);
+  if (!UUID_RE.test(id) || !name || name.length > 80 || (weekday !== null && !(isInt(weekday) && weekday >= 0 && weekday <= 6))) {
+    redirect("/admin/buoi/mau?loi=du-lieu");
+  }
+  const { error } = await db()
+    .from("session_templates")
+    .update({ name, weekday, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/buoi", "layout");
+  redirect("/admin/buoi/mau");
+}
+
+export async function deleteTemplateAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!UUID_RE.test(id)) redirect("/admin/buoi/mau");
+  const { error } = await db().from("session_templates").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/buoi", "layout");
+  redirect("/admin/buoi/mau");
 }
 
 export async function reopenSessionAction(formData: FormData) {
@@ -191,7 +309,7 @@ export async function deleteDraftAction(formData: FormData) {
 
 export interface TxnInput {
   requestId: string;
-  mode: "payment" | "prepay" | "refund" | "split" | "adjust";
+  mode: "payment" | "transfer" | "refund" | "adjust";
   direction?: "debt" | "credit";
   adjustLabel?: string;
   playerId: string;
@@ -201,9 +319,8 @@ export interface TxnInput {
   bankRef: string;
   publicNote: string;
   internalNote: string;
-  splitPayer: string;
-  splitTotal: number;
-  splitRows: { playerId: string; amount: number }[];
+  newMoney: number | null;
+  transferRows: { playerId: string; amount: number }[];
 }
 
 export interface TxnResult {
@@ -255,30 +372,50 @@ export async function recordTransactionAction(input: TxnInput): Promise<TxnResul
         public_note: input.publicNote.trim(),
       },
     ];
-  } else if (input.mode === "split") {
-    const valid = input.splitRows.filter((r) => r.playerId);
+  } else if (input.mode === "transfer") {
+    const payer = input.playerId;
+    if (!byId.has(payer)) return { ok: false, error: "Chưa chọn người trả." };
+    const valid = input.transferRows.filter((r) => r.playerId);
     if (valid.length === 0) return { ok: false, error: "Chưa chọn người được trả hộ." };
     if (valid.some((r) => !isInt(r.amount) || r.amount <= 0 || !byId.has(r.playerId))) {
       return { ok: false, error: "Số tiền từng dòng phải lớn hơn 0." };
     }
+    if (valid.some((r) => r.playerId === payer)) return { ok: false, error: "Người được trả hộ phải khác người trả." };
     if (new Set(valid.map((r) => r.playerId)).size !== valid.length) return { ok: false, error: "Một người bị nhập hai dòng." };
-    const sum = valid.reduce((s, r) => s + r.amount, 0);
-    if (!isInt(input.splitTotal) || sum !== input.splitTotal) {
-      return { ok: false, error: `Tổng các dòng (${sum.toLocaleString("vi-VN")} đ) phải bằng số tiền nhận.` };
+    const newMoney = input.newMoney ?? 0;
+    if (!isInt(newMoney) || newMoney < 0) return { ok: false, error: "Tiền chuyển khoản mới không hợp lệ." };
+    if (newMoney > 0 && cp === payer) return { ok: false, error: "Người nhận tiền phải khác người trả." };
+    const payerName = byId.get(payer)!.display_name;
+    const recipients = valid.map((r) => byId.get(r.playerId)!.display_name).join(", ");
+    if (newMoney > 0) {
+      rows.push({
+        ...base,
+        client_request_id: `${input.requestId}:in`,
+        player_id: payer,
+        kind: "payment",
+        label: null,
+        amount: newMoney,
+        counterparty_player_id: cp,
+        group_ref: input.requestId,
+        public_note: [`Trả hộ ${recipients}`, input.publicNote.trim()].filter(Boolean).join(" · "),
+      });
     }
-    if (valid.some((r) => r.playerId === cp)) return { ok: false, error: "Người nhận tiền không thể là người được trả hộ." };
-    const note = [`Chuyển hộ bởi ${input.splitPayer.trim() || "?"}`, input.publicNote.trim()].filter(Boolean).join(" · ");
-    rows = valid.map((r, i) => ({
-      ...base,
-      client_request_id: `${input.requestId}:${i}`,
-      player_id: r.playerId,
-      kind: "payment",
-      label: "Chuyển hộ",
-      amount: r.amount,
-      counterparty_player_id: cp,
-      group_ref: input.requestId,
-      public_note: note,
-    }));
+    valid.forEach((r, i) =>
+      rows.push({
+        ...base,
+        bank_ref: "",
+        client_request_id: `${input.requestId}:${i}`,
+        player_id: r.playerId,
+        kind: "transfer",
+        label: null,
+        amount: r.amount,
+        counterparty_player_id: payer,
+        group_ref: input.requestId,
+        public_note: [newMoney > 0 ? `${payerName} chuyển khoản trả hộ` : `${payerName} trả hộ từ quỹ`, input.publicNote.trim()]
+          .filter(Boolean)
+          .join(" · "),
+      }),
+    );
   } else {
     if (!byId.has(input.playerId)) return { ok: false, error: "Chưa chọn người." };
     if (!isInt(input.amount) || input.amount <= 0) return { ok: false, error: "Số tiền phải lớn hơn 0." };
@@ -295,7 +432,7 @@ export async function recordTransactionAction(input: TxnInput): Promise<TxnResul
         client_request_id: input.requestId,
         player_id: input.playerId,
         kind: input.mode === "refund" ? "refund" : "payment",
-        label: input.mode === "prepay" ? PREPAY_LABEL : null,
+        label: null,
         amount: input.amount,
         counterparty_player_id: cp,
         public_note: input.publicNote.trim(),
@@ -313,10 +450,26 @@ export async function voidTransactionAction(formData: FormData) {
   const admin = await requireAdmin();
   const id = Number(formData.get("id"));
   const reason = String(formData.get("reason") ?? "").trim();
-  const back = String(formData.get("back") ?? "/admin/giao-dich");
+  const rawBack = String(formData.get("back") ?? "");
+  const back = /^\/admin(\/|$)/.test(rawBack) && !rawBack.startsWith("//") ? rawBack : "/admin/giao-dich";
   if (!reason) redirect(`${back}${back.includes("?") ? "&" : "?"}loi=ly-do`);
-  const { error } = await db().rpc("void_transaction", { p_id: id, p_reason: reason, p_actor: admin.email });
-  if (error) throw new Error(error.message);
+  if (!isInt(id) || id <= 0) redirect(back);
+  const { data: target } = await db().from("transactions").select("id, group_ref").eq("id", id).maybeSingle();
+  if (!target) redirect(back);
+  let ids = [id];
+  if (target.group_ref) {
+    const { data: group } = await db()
+      .from("transactions")
+      .select("id")
+      .eq("group_ref", target.group_ref)
+      .is("voided_at", null)
+      .order("id");
+    ids = (group ?? []).map((g) => Number(g.id));
+  }
+  for (const tid of ids) {
+    const { error } = await db().rpc("void_transaction", { p_id: tid, p_reason: reason, p_actor: admin.email });
+    if (error) throw new Error(error.message);
+  }
   done();
   redirect(back);
 }
